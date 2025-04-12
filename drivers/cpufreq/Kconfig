@@ -145,6 +145,34 @@ config CPU_FREQ_GOV_POWERSAVE
 
 	  If in doubt, say Y.
 
+menu "CPU Frequency scaling governors"
+
+config CPU_FREQ_GOV_PULNICE
+    tristate "'pulnice' generic CPUFreq governor"
+    help
+      Pulnice is a balanced CPU frequency governor that provides:
+      - Three-zone frequency control (high/mid/low utilization)
+      - Thermal protection awareness
+      - Kernel version compatibility (4.4 - 6.6+)
+      - Efficient built-in operation with module fallback
+
+      If in doubt, say Y.
+
+config CPU_FREQ_GOV_PULNICE_MODULE
+    bool "Build pulnice governor as module"
+    depends on CPU_FREQ_GOV_PULNICE
+    help
+      Build the pulnice governor as a loadable module.
+      Only enable this if you specifically need it as a module.
+
+config CPU_FREQ_DEFAULT_GOV_PULNICE
+    bool "pulnice"
+    depends on CPU_FREQ_GOV_PULNICE
+    help
+      Use the pulnice governor as the default CPUFreq governor.
+
+endmenu
+
 config CPU_FREQ_GOV_USERSPACE
 	tristate "'userspace' governor for userspace frequency scaling"
 	help
@@ -177,7 +205,9 @@ config CPU_FREQ_GOV_ONDEMAND
 	  For details, take a look at linux/Documentation/cpu-freq.
 
 	  If in doubt, say N.
+		
 
+		
 config CPU_FREQ_GOV_CONSERVATIVE
 	tristate "'conservative' cpufreq governor"
 	depends on CPU_FREQ

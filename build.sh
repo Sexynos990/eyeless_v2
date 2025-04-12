@@ -17,6 +17,7 @@ Options:
     -m, --model [value]    Specify the model code of the phone
     -k, --ksu [y/N]        Include KernelSU
     -r, --recovery [y/N]   Compile kernel for an Android Recovery
+    -f, --freq [value]     Set CPU frequency (underclocked, overclocked, original "if want to add yourself its in Freq dir")
 EOF
 }
 
@@ -32,6 +33,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --recovery|-r)
             RECOVERY_OPTION="$2"
+            shift 2
+            ;;
+        --freq|-f)
+            FREQ_OPTION="$2"
             shift 2
             ;;
         *)\
@@ -139,6 +144,18 @@ if [ -z "$RECOVERY" ]; then
     echo "Recovery: N"
 else
     echo "Recovery: Y"
+fi
+
+# Handle Frequency Option
+if [[ -n "$FREQ_OPTION" ]]; then
+    echo "Applying CPU Frequency: $FREQ_OPTION"
+    if [ -f "Freq/${FREQ_OPTION}.c" ]; then
+        cp -r "Freq/${FREQ_OPTION}.c" "drivers/cpufreq/exynos-acme.c"
+        echo "Applied ${FREQ_OPTION} preset to exynos-acme.c"
+    else
+        echo "Error: Frequency file Freq/${FREQ_OPTION}.c not found!"
+        exit 1
+    fi
 fi
 
 echo "-----------------------------------------------"

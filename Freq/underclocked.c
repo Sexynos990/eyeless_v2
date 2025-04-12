@@ -1188,7 +1188,7 @@ static __init int init_table(struct exynos_cpufreq_domain *domain)
 	 */
 
 	
-	static int cpu_undervolt = 32000;
+	static int cpu_undervolt = 40000;
 	
 	table = kzalloc(sizeof(unsigned long) * domain->table_size, GFP_KERNEL);
 	if (!table)
@@ -1552,7 +1552,7 @@ __setup("cpu_min_c3=", cpufreq_read_cpu_min_c3);
 
 
 /*Overclocking little cores to 2002 MHz*/
-unsigned long arg_cpu_max_c1 = 2002000; /*max_cpu_freq=2106 MHz for little cores*/
+unsigned long arg_cpu_max_c1 = 1892000; /*max_cpu_freq=2106 MHz for little cores*/
 
 static int __init cpufreq_read_cpu_max_c1(char *cpu_max_c1) /*integer remains in memory after function call*/
 {
@@ -1570,7 +1570,7 @@ static int __init cpufreq_read_cpu_max_c1(char *cpu_max_c1) /*integer remains in
 __setup("cpu_max_c1=", cpufreq_read_cpu_max_c1);
 
 /*Overclocking perf cores to 2600 MHz*/
-unsigned long arg_cpu_max_c2 = 2600000; /*max_cpu_freq=2600 MHz*/
+unsigned long arg_cpu_max_c2 = 2000000; /*max_cpu_freq=2600 MHz*/
 
 static __init int cpufreq_read_cpu_max_c2(char *cpu_max_c2)
 {
@@ -1588,7 +1588,7 @@ static __init int cpufreq_read_cpu_max_c2(char *cpu_max_c2)
 __setup("cpu_max_c2=", cpufreq_read_cpu_max_c2);
 
 /*Overclocking prime cores to 3016 MHz*/
-unsigned long arg_cpu_max_c3 = 3016000; /*max_cpu_freq=3016 MHz*/
+unsigned long arg_cpu_max_c3 = 2016000; /*max_cpu_freq=3016 MHz*/
 
 static __init int cpufreq_read_cpu_max_c3(char *cpu_max_c3)
 {
