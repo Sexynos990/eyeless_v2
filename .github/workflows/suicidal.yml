@@ -2,151 +2,117 @@ name: KERNEL BUILDER
 
 on:
   push:
-    branches:
-      - EYELESS-Necrophiliac
+    branches: [main]
   workflow_dispatch:
 
-jobs:
-  setup:
-    runs-on: ubuntu-latest
-    outputs:
-      version_name: ${{ steps.version_name.outputs.version }}
-      commit_hash: ${{ steps.commit_info.outputs.hash }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+env:
+  REPO_URL: https://github.com/Sexynos990/eyeless_v2
+  ARTIFACT_DIR: ${{ github.workspace }}/artifacts
 
-      - name: Get Version Name
-        id: version_name
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # ===== SETUP =====
+      - name: Clone repository
+        run: |
+          git clone --depth 1 $REPO_URL .
+          git submodule update --init --recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential libncurses5-dev bison flex libssl-dev \
+            libelf-dev bc curl wget git python3 ccache libarchive-tools jq
+
+      # ===== VERSION INFO =====
+      - name: Get build metadata
+        id: metadata
         run: |
           VERSION=$(git log -1 --pretty=%s | sed 's/ /-/g')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
-      - name: Get Commit Hash
-        id: commit_info
-        run: |
           COMMIT_HASH=$(git rev-parse --short HEAD)
-          echo "hash=$COMMIT_HASH" >> $GITHUB_OUTPUT
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "commit=${COMMIT_HASH}" >> $GITHUB_OUTPUT
+          echo "timestamp=${TIMESTAMP}" >> $GITHUB_OUTPUT
+          echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
+          echo "TIMESTAMP=${TIMESTAMP}" >> $GITHUB_ENV
 
-  original:
-    needs: setup
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - name: Set up environment
+      # ===== BUILD STAGES =====
+      - name: Build Original kernels
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev bison flex libssl-dev \
-            libelf-dev bc curl wget git python3 ccache git libarchive-tools
-
-      - name: Build Original
-        run: |
-          chmod +x build_all.sh
           ./build_all.sh -k y -f original
-          mkdir -p build/out/saved/original
-          for DEVICE_DIR in build/out/*/; do
-            DEVICE=$(basename "$DEVICE_DIR")
-            FILE=$(find "$DEVICE_DIR" -type f -name "*.zip" | head -n 1)
-            [ -f "$FILE" ] || continue
-            TIMESTAMP=$(date +"%d-%m-%Y_%H-%M-%S")
-            cp "$FILE" "build/out/saved/original/kernel-${{ needs.setup.outputs.version_name }}-Original_${DEVICE}_KSU_${TIMESTAMP}.zip"
-          done
+          mkdir -p ${ARTIFACT_DIR}/original
+          find build/out -name '*.zip' -exec cp {} ${ARTIFACT_DIR}/original \;
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: original-builds
-          path: build/out/saved/original/*.zip
-
-  overclocked:
-    needs: setup
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - name: Set up environment
+      - name: Build Overclocked kernels
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev bison flex libssl-dev \
-            libelf-dev bc curl wget git python3 ccache git libarchive-tools
-
-      - name: Build Overclocked
-        run: |
-          chmod +x build_all.sh
           ./build_all.sh -k y -f overclocked
-          mkdir -p build/out/saved/overclocked
-          for DEVICE_DIR in build/out/*/; do
-            DEVICE=$(basename "$DEVICE_DIR")
-            FILE=$(find "$DEVICE_DIR" -type f -name "*.zip" | head -n 1)
-            [ -f "$FILE" ] || continue
-            TIMESTAMP=$(date +"%d-%m-%Y_%H-%M-%S")
-            cp "$FILE" "build/out/saved/overclocked/kernel-${{ needs.setup.outputs.version_name }}-Overclocked_${DEVICE}_KSU_${TIMESTAMP}.zip"
-          done
+          mkdir -p ${ARTIFACT_DIR}/overclocked
+          find build/out -name '*.zip' -exec cp {} ${ARTIFACT_DIR}/overclocked \;
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: overclocked-builds
-          path: build/out/saved/overclocked/*.zip
-
-  underclocked:
-    needs: setup
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - name: Set up environment
+      - name: Build Underclocked kernels
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev bison flex libssl-dev \
-            libelf-dev bc curl wget git python3 ccache git libarchive-tools
-
-      - name: Build Underclocked
-        run: |
-          chmod +x build_all.sh
           ./build_all.sh -k y -f underclocked
-          mkdir -p build/out/saved/underclocked
-          for DEVICE_DIR in build/out/*/; do
-            DEVICE=$(basename "$DEVICE_DIR")
-            FILE=$(find "$DEVICE_DIR" -type f -name "*.zip" | head -n 1)
-            [ -f "$FILE" ] || continue
-            TIMESTAMP=$(date +"%d-%m-%Y_%H-%M-%S")
-            cp "$FILE" "build/out/saved/underclocked/kernel-${{ needs.setup.outputs.version_name }}-Underclocked_${DEVICE}_KSU_${TIMESTAMP}.zip"
+          mkdir -p ${ARTIFACT_DIR}/underclocked
+          find build/out -name '*.zip' -exec cp {} ${ARTIFACT_DIR}/underclocked \;
+
+      # ===== ARTIFACT PROCESSING =====
+      - name: Rename artifacts
+        run: |
+          for variant in original overclocked underclocked; do
+            mkdir -p ${ARTIFACT_DIR}/renamed/${variant}
+            for file in ${ARTIFACT_DIR}/${variant}/*.zip; do
+              DEVICE=$(basename "$file" | cut -d'-' -f2)
+              NEW_NAME="kernel-${VERSION}-${variant}_${DEVICE}_${COMMIT_HASH}_${TIMESTAMP}.zip"
+              cp "$file" "${ARTIFACT_DIR}/renamed/${variant}/${NEW_NAME}"
+            done
           done
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: underclocked-builds
-          path: build/out/saved/underclocked/*.zip
-
-  release:
-    needs: [setup, original, overclocked, underclocked]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
+      # ===== RELEASE CREATION =====
+      - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: "release-${{ needs.setup.outputs.commit_hash }}"
-          release_name: "Kernel Build - ${{ needs.setup.outputs.version_name }}"
-          body: "Automated build from commit: `${{ needs.setup.outputs.commit_hash }}`"
-          draft: false
-          prerelease: false
+        run: |
+          # Create release
+          RELEASE_JSON=$(curl -s -X POST \
+            -H "Authorization: token $GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "tag_name": "v${TIMESTAMP}",
+              "name": "Kernel Build ${VERSION}",
+              "body": "Automated build\nVersion: ${VERSION}\nCommit: ${COMMIT_HASH}",
+              "draft": false,
+              "prerelease": false
+            }' \
+            https://api.github.com/repos/Sexynos990/eyeless_v2/releases)
+
+          RELEASE_ID=$(echo "$RELEASE_JSON" | jq -r '.id')
+          echo "RELEASE_ID=${RELEASE_ID}" >> $GITHUB_ENV
 
       - name: Upload Release Assets
-        run: |
-          gh release upload "release-${{ needs.setup.outputs.commit_hash }}" artifacts/**/*.zip --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for file in ${ARTIFACT_DIR}/renamed/**/*.zip; do
+            echo "Uploading $file"
+            curl -s -X POST \
+              -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Content-Type: application/zip" \
+              --data-binary @"$file" \
+              "https://uploads.github.com/repos/Sexynos990/eyeless_v2/releases/${RELEASE_ID}/assets?name=$(basename "$file")"
+          done
+
+      # ===== FINAL REPORT =====
+      - name: Show build summary
+        run: |
+          echo "=== BUILD COMPLETE ==="
+          echo "Version: ${VERSION}"
+          echo "Commit: ${COMMIT_HASH}"
+          echo "Timestamp: ${TIMESTAMP}"
+          echo "Artifacts:"
+          find ${ARTIFACT_DIR}/renamed -type f -exec ls -lh {} \;
+          echo "Release URL:"
+          echo "https://github.com/Sexynos990/eyeless_v2/releases/tag/v${TIMESTAMP}"
