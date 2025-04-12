@@ -1,0 +1,103 @@
+name: KERNEL BUILDER
+
+on:
+  push:
+    branches:
+      - EYELESS-Necrophiliac
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up the environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libncurses5-dev bison flex libssl-dev \
+            libelf-dev bc curl wget git python3 ccache git libarchive-tools
+
+      - name: KernelSU-next
+        run: |
+          git clone https://github.com/KernelSU-Next/KernelSU-Next KernelSU-Next
+
+      - name: Get Version Name from Repo
+        id: version_name
+        run: |
+          VERSION=$(git log -1 --pretty=%s | sed 's/ /-/g')  # Get latest commit message as version
+          echo "VERSION_NAME=$VERSION" >> $GITHUB_ENV
+
+      - name: Run build script for Original
+        run: |
+          chmod +x build_all.sh
+          ./build_all.sh -k y -f original
+          mkdir -p build/out/saved/original
+          for DEVICE_DIR in build/out/*/; do
+            DEVICE=$(basename "$DEVICE_DIR")
+            FILE=$(find "$DEVICE_DIR" -type f -name "*.zip" | head -n 1)
+            [ -f "$FILE" ] || continue
+            TIMESTAMP=$(date +"%d-%m-%Y_%H-%M-%S")
+            cp "$FILE" "build/out/saved/original/eyeless-${VERSION_NAME}-Original_${DEVICE}_UNOFFICIAL_KSU_${TIMESTAMP}.zip"
+          done
+
+      - name: Run build script for Overclocked
+        run: |
+          ./build_all.sh -k y -f overclocked
+          mkdir -p build/out/saved/overclocked
+          for DEVICE_DIR in build/out/*/; do
+            DEVICE=$(basename "$DEVICE_DIR")
+            FILE=$(find "$DEVICE_DIR" -type f -name "*.zip" | head -n 1)
+            [ -f "$FILE" ] || continue
+            TIMESTAMP=$(date +"%d-%m-%Y_%H-%M-%S")
+            cp "$FILE" "build/out/saved/overclocked/eyeless-${VERSION_NAME}-Overclocked_${DEVICE}_UNOFFICIAL_KSU_${TIMESTAMP}.zip"
+          done
+
+      - name: Run build script for Underclocked
+        run: |
+          ./build_all.sh -k y -f underclocked
+          mkdir -p build/out/saved/underclocked
+          for DEVICE_DIR in build/out/*/; do
+            DEVICE=$(basename "$DEVICE_DIR")
+            FILE=$(find "$DEVICE_DIR" -type f -name "*.zip" | head -n 1)
+            [ -f "$FILE" ] || continue
+            TIMESTAMP=$(date +"%d-%m-%Y_%H-%M-%S")
+            cp "$FILE" "build/out/saved/underclocked/eyeless-${VERSION_NAME}-Underclocked_${DEVICE}_UNOFFICIAL_KSU_${TIMESTAMP}.zip"
+          done
+
+      - name: Get Commit Info
+        id: commit_info
+        run: |
+          COMMIT_HASH=$(git rev-parse --short HEAD)
+          echo "commit_hash=$COMMIT_HASH" >> $GITHUB_ENV
+
+      - name: Upload Kernel Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: "Kernel-Build-${{ env.commit_hash }}"
+          path: build/out/saved/**/*  # Upload all saved builds
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: "release-${{ env.commit_hash }}"
+          release_name: "Kernel Build - ${{ env.VERSION_NAME }}"
+          body: "Automated build from commit: `${{ env.commit_hash }}`"
+          draft: false
+          prerelease: false
+
+      - name: Upload Kernel Files to Release
+        run: |
+          for FILE in build/out/saved/**/*; do
+            [ -f "$FILE" ] || continue
+            BASENAME=$(basename "$FILE")
+            echo "Uploading $BASENAME..."
+            gh release upload "release-${{ env.commit_hash }}" "$FILE" --clobber
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

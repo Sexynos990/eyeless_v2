@@ -1,0 +1,36 @@
+name: Kernel Build
+
+on:
+  push:
+    branches:
+      - EYELESS-V0
+  pull_request:
+    branches:
+      - EYELESS-V0
+
+jobs:
+  build:
+    runs-on: ubuntu-latest  
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up the environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libncurses5-dev bison flex libssl-dev \
+            libelf-dev bc curl wget git python3
+
+      - name: Run build script
+        run: |
+          # Make the build script executable (if it's not already)
+          chmod +x build.sh
+          # Run the build script
+          ./build_all.sh
+
+      - name: Upload Kernel Artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: kernel-artifacts
+          path: build/out/all/*  # Upload everything inside the build/out directory
