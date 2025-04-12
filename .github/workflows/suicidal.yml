@@ -8,6 +8,7 @@ on:
 env:
   REPO_URL: https://github.com/Sexynos990/eyeless_v2
   ARTIFACT_DIR: ${{ github.workspace }}/artifacts
+  FINAL_DIR: ${{ github.workspace }}/final_zips
 
 jobs:
   build:
@@ -24,7 +25,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential libncurses5-dev bison flex libssl-dev \
-            libelf-dev bc curl wget git python3 ccache libarchive-tools jq
+            libelf-dev bc curl wget git python3 ccache libarchive-tools jq zip
 
       # ===== VERSION INFO =====
       - name: Get build metadata
@@ -33,9 +34,6 @@ jobs:
           VERSION=$(git log -1 --pretty=%s | sed 's/ /-/g')
           COMMIT_HASH=$(git rev-parse --short HEAD)
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "commit=${COMMIT_HASH}" >> $GITHUB_OUTPUT
-          echo "timestamp=${TIMESTAMP}" >> $GITHUB_OUTPUT
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
           echo "COMMIT_HASH=${COMMIT_HASH}" >> $GITHUB_ENV
           echo "TIMESTAMP=${TIMESTAMP}" >> $GITHUB_ENV
@@ -44,39 +42,48 @@ jobs:
       - name: Build Original kernels
         run: |
           ./build_all.sh -k y -f original
-          mkdir -p ${ARTIFACT_DIR}/original
-          find build/out -name '*.zip' -exec cp {} ${ARTIFACT_DIR}/original \;
+          mkdir -p ${ARTIFACT_DIR}/Original
+          find build/out -name '*.zip' -exec cp {} ${ARTIFACT_DIR}/Original \;
 
       - name: Build Overclocked kernels
         run: |
           ./build_all.sh -k y -f overclocked
-          mkdir -p ${ARTIFACT_DIR}/overclocked
-          find build/out -name '*.zip' -exec cp {} ${ARTIFACT_DIR}/overclocked \;
+          mkdir -p ${ARTIFACT_DIR}/OC
+          find build/out -name '*.zip' -exec cp {} ${ARTIFACT_DIR}/OC \;
 
       - name: Build Underclocked kernels
         run: |
           ./build_all.sh -k y -f underclocked
-          mkdir -p ${ARTIFACT_DIR}/underclocked
-          find build/out -name '*.zip' -exec cp {} ${ARTIFACT_DIR}/underclocked \;
+          mkdir -p ${ARTIFACT_DIR}/UC
+          find build/out -name '*.zip' -exec cp {} ${ARTIFACT_DIR}/UC \;
 
-      # ===== ARTIFACT PROCESSING =====
-      - name: Rename artifacts
+      # ===== PACKAGE ARTIFACTS =====
+      - name: Create final zip packages
         run: |
-          for variant in original overclocked underclocked; do
-            mkdir -p ${ARTIFACT_DIR}/renamed/${variant}
-            for file in ${ARTIFACT_DIR}/${variant}/*.zip; do
-              DEVICE=$(basename "$file" | cut -d'-' -f2)
-              NEW_NAME="kernel-${VERSION}-${variant}_${DEVICE}_${COMMIT_HASH}_${TIMESTAMP}.zip"
-              cp "$file" "${ARTIFACT_DIR}/renamed/${variant}/${NEW_NAME}"
-            done
-          done
+          mkdir -p ${FINAL_DIR}
+          
+          # Zip Original kernels
+          cd ${ARTIFACT_DIR}/Original && \
+          zip -r ${FINAL_DIR}/Original_Kernels_${TIMESTAMP}.zip ./* && \
+          cd -
+          
+          # Zip Overclocked kernels
+          cd ${ARTIFACT_DIR}/OC && \
+          zip -r ${FINAL_DIR}/OC_Kernels_${TIMESTAMP}.zip ./* && \
+          cd -
+          
+          # Zip Underclocked kernels
+          cd ${ARTIFACT_DIR}/UC && \
+          zip -r ${FINAL_DIR}/UC_Kernels_${TIMESTAMP}.zip ./* && \
+          cd -
+          
+          ls -lh ${FINAL_DIR}
 
       # ===== RELEASE CREATION =====
       - name: Create GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Create release
           RELEASE_JSON=$(curl -s -X POST \
             -H "Authorization: token $GITHUB_TOKEN" \
             -H "Content-Type: application/json" \
@@ -96,7 +103,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          for file in ${ARTIFACT_DIR}/renamed/**/*.zip; do
+          for file in ${FINAL_DIR}/*.zip; do
             echo "Uploading $file"
             curl -s -X POST \
               -H "Authorization: token $GITHUB_TOKEN" \
@@ -112,7 +119,7 @@ jobs:
           echo "Version: ${VERSION}"
           echo "Commit: ${COMMIT_HASH}"
           echo "Timestamp: ${TIMESTAMP}"
-          echo "Artifacts:"
-          find ${ARTIFACT_DIR}/renamed -type f -exec ls -lh {} \;
+          echo "Final packages:"
+          ls -lh ${FINAL_DIR}
           echo "Release URL:"
           echo "https://github.com/Sexynos990/eyeless_v2/releases/tag/v${TIMESTAMP}"
